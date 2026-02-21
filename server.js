@@ -84,6 +84,25 @@ app.get("/test-db", async (req, res) => {
     res.status(500).json({ error: "Database connection failed" });
   }
 });
+app.get("/init-db", async (req, res) => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        google_id TEXT UNIQUE,
+        name TEXT,
+        email TEXT UNIQUE,
+        profile_picture TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    res.json({ message: "Users table created successfully!" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to create table" });
+  }
+});
 
 /* Google Auth */
 
