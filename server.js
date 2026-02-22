@@ -25,7 +25,7 @@ const pool = new Pool({
 });
 
 /* =========================
-   Basic Middleware
+   Middleware
 ========================= */
 
 app.use(
@@ -70,7 +70,6 @@ passport.use(
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
-        // Save user in database if not exists
         await pool.query(
           `
           INSERT INTO users (google_id, name, email, profile_picture)
@@ -116,7 +115,7 @@ app.get("/test-db", async (req, res) => {
   }
 });
 
-/* Initialize DB (Create Users Table) */
+/* Initialize Users Table */
 app.get("/init-db", async (req, res) => {
   try {
     await pool.query(`
@@ -134,6 +133,17 @@ app.get("/init-db", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to create table" });
+  }
+});
+
+/* View All Users */
+app.get("/users", async (req, res) => {
+  try {
+    const result = await pool.query("SELECT * FROM users");
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch users" });
   }
 });
 
