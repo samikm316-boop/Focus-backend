@@ -59,11 +59,21 @@ app.use(passport.session());
 ========================= */
 
 passport.serializeUser((user, done) => {
+  // Store only Google ID in session
   done(null, user.id);
 });
 
-passport.deserializeUser((user, done) => {
-  done(null, user);
+passport.deserializeUser(async (id, done) => {
+  try {
+    const result = await pool.query(
+      "SELECT * FROM users WHERE google_id = $1",
+      [id]
+    );
+
+    done(null, result.rows[0]);
+  } catch (err) {
+    done(err, null);
+  }
 });
 
 passport.use(
@@ -90,7 +100,9 @@ passport.use(
           ]
         );
 
-        return done(null, profile);
+        // Store only google_id in session
+        return done(null, { id: profile.id });
+
       } catch (error) {
         console.error("Google Auth DB Error:", error);
         return done(error, null);
@@ -127,7 +139,6 @@ app.get("/test-db", async (req, res) => {
       time: result.rows[0],
     });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: "Database connection failed" });
   }
 });
@@ -148,7 +159,6 @@ app.get("/init-db", async (req, res) => {
 
     res.json({ message: "Users table created successfully!" });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: "Failed to create table" });
   }
 });
@@ -159,7 +169,6 @@ app.get("/users", isAuthenticated, async (req, res) => {
     const result = await pool.query("SELECT * FROM users");
     res.json(result.rows);
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: "Failed to fetch users" });
   }
 });
@@ -184,7 +193,7 @@ app.get(
   }
 );
 
-/* AI Chat Route (Protected) */
+/* Protected AI Chat Route */
 
 app.post("/api/chat", isAuthenticated, async (req, res) => {
   try {
@@ -226,7 +235,6 @@ app.post("/api/chat", isAuthenticated, async (req, res) => {
         "No response from AI.",
     });
   } catch (error) {
-    console.error("Chat error:", error);
     res.status(500).json({ error: "Something went wrong" });
   }
 });
