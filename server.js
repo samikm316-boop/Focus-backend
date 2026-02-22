@@ -59,7 +59,7 @@ app.use(passport.session());
 ========================= */
 
 passport.serializeUser((user, done) => {
-  done(null, user);
+  done(null, user.id);
 });
 
 passport.deserializeUser((user, done) => {
