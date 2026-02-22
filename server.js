@@ -10,7 +10,6 @@ import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 dotenv.config();
 
 const { Pool } = pkg;
-
 const app = express();
 
 /* =========================
@@ -101,6 +100,17 @@ passport.use(
 );
 
 /* =========================
+   Auth Middleware
+========================= */
+
+function isAuthenticated(req, res, next) {
+  if (req.isAuthenticated()) {
+    return next();
+  }
+  res.status(401).json({ error: "Unauthorized" });
+}
+
+/* =========================
    Routes
 ========================= */
 
@@ -143,8 +153,8 @@ app.get("/init-db", async (req, res) => {
   }
 });
 
-/* View All Users */
-app.get("/users", async (req, res) => {
+/* Protected: View All Users */
+app.get("/users", isAuthenticated, async (req, res) => {
   try {
     const result = await pool.query("SELECT * FROM users");
     res.json(result.rows);
@@ -152,6 +162,11 @@ app.get("/users", async (req, res) => {
     console.error(err);
     res.status(500).json({ error: "Failed to fetch users" });
   }
+});
+
+/* Protected: Current Logged-in User */
+app.get("/me", isAuthenticated, (req, res) => {
+  res.json(req.user);
 });
 
 /* Google Auth */
@@ -165,13 +180,13 @@ app.get(
   "/auth/google/callback",
   passport.authenticate("google", { failureRedirect: "/" }),
   (req, res) => {
-    res.send("Google login successful 🚀");
+    res.redirect("/me");
   }
 );
 
-/* AI Chat Route */
+/* AI Chat Route (Protected) */
 
-app.post("/api/chat", async (req, res) => {
+app.post("/api/chat", isAuthenticated, async (req, res) => {
   try {
     const { message } = req.body;
 
