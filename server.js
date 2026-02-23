@@ -185,6 +185,68 @@ app.get(
 
 app.post("/api/chat", isAuthenticated, async (req, res) => {
   try {
+     app.get("/api/chat-test", isAuthenticated, async (req, res) => {
+  try {
+    const message = req.query.message;
+
+    if (!message) {
+      return res.status(400).json({ error: "Message query is required" });
+    }
+
+    const userId = req.user.id;
+
+    // Create new conversation
+    const newConvo = await pool.query(
+      "INSERT INTO conversations (user_id) VALUES ($1) RETURNING *",
+      [userId]
+    );
+
+    const convoId = newConvo.rows[0].id;
+
+    // Save user message
+    await pool.query(
+      "INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)",
+      [convoId, "user", message]
+    );
+
+    // Call AI
+    const response = await fetch(
+      "https://openrouter.ai/api/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "openai/gpt-4o-mini",
+          messages: [
+            { role: "system", content: "You are Focus+, a productivity AI assistant." },
+            { role: "user", content: message },
+          ],
+        }),
+      }
+    );
+
+    const data = await response.json();
+    const aiReply =
+      data?.choices?.[0]?.message?.content || "No response from AI.";
+
+    // Save AI reply
+    await pool.query(
+      "INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)",
+      [convoId, "assistant", aiReply]
+    );
+
+    res.json({
+      conversationId: convoId,
+      reply: aiReply,
+    });
+
+  } catch (error) {
+    res.status(500).json({ error: "Something went wrong" });
+  }
+});
     const { message, conversationId } = req.body;
 
     if (!message) {
