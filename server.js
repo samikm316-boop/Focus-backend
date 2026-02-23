@@ -118,7 +118,7 @@ app.get("/", (req, res) => {
   res.send("Focus+ Backend is running 🚀");
 });
 
-/* Initialize ALL Tables */
+/* Initialize Database Tables */
 app.get("/init-db", async (req, res) => {
   try {
     await pool.query(`
@@ -157,14 +157,12 @@ app.get("/init-db", async (req, res) => {
   }
 });
 
-/* Protected: Current User */
+/* Current User */
 app.get("/me", isAuthenticated, (req, res) => {
   res.json(req.user);
 });
 
-/* =========================
-   Google Auth
-========================= */
+/* Google Auth */
 
 app.get(
   "/auth/google",
@@ -180,73 +178,11 @@ app.get(
 );
 
 /* =========================
-   AI Chat (Persistent)
+   AI Chat (POST - Real)
 ========================= */
 
 app.post("/api/chat", isAuthenticated, async (req, res) => {
   try {
-     app.get("/api/chat-test", isAuthenticated, async (req, res) => {
-  try {
-    const message = req.query.message;
-
-    if (!message) {
-      return res.status(400).json({ error: "Message query is required" });
-    }
-
-    const userId = req.user.id;
-
-    // Create new conversation
-    const newConvo = await pool.query(
-      "INSERT INTO conversations (user_id) VALUES ($1) RETURNING *",
-      [userId]
-    );
-
-    const convoId = newConvo.rows[0].id;
-
-    // Save user message
-    await pool.query(
-      "INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)",
-      [convoId, "user", message]
-    );
-
-    // Call AI
-    const response = await fetch(
-      "https://openrouter.ai/api/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "openai/gpt-4o-mini",
-          messages: [
-            { role: "system", content: "You are Focus+, a productivity AI assistant." },
-            { role: "user", content: message },
-          ],
-        }),
-      }
-    );
-
-    const data = await response.json();
-    const aiReply =
-      data?.choices?.[0]?.message?.content || "No response from AI.";
-
-    // Save AI reply
-    await pool.query(
-      "INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)",
-      [convoId, "assistant", aiReply]
-    );
-
-    res.json({
-      conversationId: convoId,
-      reply: aiReply,
-    });
-
-  } catch (error) {
-    res.status(500).json({ error: "Something went wrong" });
-  }
-});
     const { message, conversationId } = req.body;
 
     if (!message) {
@@ -256,7 +192,6 @@ app.post("/api/chat", isAuthenticated, async (req, res) => {
     const userId = req.user.id;
     let convoId = conversationId;
 
-    // Create new conversation if none provided
     if (!convoId) {
       const newConvo = await pool.query(
         "INSERT INTO conversations (user_id) VALUES ($1) RETURNING *",
@@ -265,23 +200,11 @@ app.post("/api/chat", isAuthenticated, async (req, res) => {
       convoId = newConvo.rows[0].id;
     }
 
-    // Verify ownership
-    const check = await pool.query(
-      "SELECT * FROM conversations WHERE id = $1 AND user_id = $2",
-      [convoId, userId]
-    );
-
-    if (check.rows.length === 0) {
-      return res.status(403).json({ error: "Access denied" });
-    }
-
-    // Save user message
     await pool.query(
       "INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)",
       [convoId, "user", message]
     );
 
-    // Call AI
     const response = await fetch(
       "https://openrouter.ai/api/v1/chat/completions",
       {
@@ -304,16 +227,71 @@ app.post("/api/chat", isAuthenticated, async (req, res) => {
     const aiReply =
       data?.choices?.[0]?.message?.content || "No response from AI.";
 
-    // Save AI reply
     await pool.query(
       "INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)",
       [convoId, "assistant", aiReply]
     );
 
-    res.json({
-      conversationId: convoId,
-      reply: aiReply,
-    });
+    res.json({ conversationId: convoId, reply: aiReply });
+
+  } catch (error) {
+    res.status(500).json({ error: "Something went wrong" });
+  }
+});
+
+/* =========================
+   Browser Test Route (GET)
+========================= */
+
+app.get("/api/chat-test", isAuthenticated, async (req, res) => {
+  try {
+    const message = req.query.message;
+    if (!message) {
+      return res.status(400).json({ error: "Message query is required" });
+    }
+
+    const userId = req.user.id;
+
+    const newConvo = await pool.query(
+      "INSERT INTO conversations (user_id) VALUES ($1) RETURNING *",
+      [userId]
+    );
+
+    const convoId = newConvo.rows[0].id;
+
+    await pool.query(
+      "INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)",
+      [convoId, "user", message]
+    );
+
+    const response = await fetch(
+      "https://openrouter.ai/api/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "openai/gpt-4o-mini",
+          messages: [
+            { role: "system", content: "You are Focus+, a productivity AI assistant." },
+            { role: "user", content: message },
+          ],
+        }),
+      }
+    );
+
+    const data = await response.json();
+    const aiReply =
+      data?.choices?.[0]?.message?.content || "No response from AI.";
+
+    await pool.query(
+      "INSERT INTO messages (conversation_id, role, content) VALUES ($1, $2, $3)",
+      [convoId, "assistant", aiReply]
+    );
+
+    res.json({ conversationId: convoId, reply: aiReply });
 
   } catch (error) {
     res.status(500).json({ error: "Something went wrong" });
@@ -333,27 +311,21 @@ app.get("/api/conversations", isAuthenticated, async (req, res) => {
 });
 
 /* =========================
-   Get Messages of Conversation
+   Get Messages
 ========================= */
 
-app.get(
-  "/api/conversations/:id/messages",
-  isAuthenticated,
-  async (req, res) => {
-    const convoId = req.params.id;
+app.get("/api/conversations/:id/messages", isAuthenticated, async (req, res) => {
+  const result = await pool.query(
+    `SELECT m.*
+     FROM messages m
+     JOIN conversations c ON m.conversation_id = c.id
+     WHERE m.conversation_id = $1 AND c.user_id = $2
+     ORDER BY m.created_at ASC`,
+    [req.params.id, req.user.id]
+  );
 
-    const result = await pool.query(
-      `SELECT m.*
-       FROM messages m
-       JOIN conversations c ON m.conversation_id = c.id
-       WHERE m.conversation_id = $1 AND c.user_id = $2
-       ORDER BY m.created_at ASC`,
-      [convoId, req.user.id]
-    );
-
-    res.json(result.rows);
-  }
-);
+  res.json(result.rows);
+});
 
 /* =========================
    Start Server
