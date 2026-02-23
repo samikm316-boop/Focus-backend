@@ -117,7 +117,7 @@ function isAuthenticated(req, res, next) {
 ========================= */
 
 app.get("/", (req, res) => {
-  res.send("Focus+ Backend v2 running 🚀");
+  res.send("Focus+ Backend v3 running 🚀");
 });
 
 app.get("/me", isAuthenticated, (req, res) => {
@@ -142,7 +142,7 @@ app.get(
 );
 
 /* =========================
-   CHAT (WITH MEMORY)
+   Chat With Memory (POST)
 ========================= */
 
 app.post("/api/chat", isAuthenticated, async (req, res) => {
@@ -154,7 +154,6 @@ app.post("/api/chat", isAuthenticated, async (req, res) => {
     const userId = req.user.id;
     let convoId = conversationId;
 
-    // Create new conversation if needed
     if (!convoId) {
       const newConvo = await pool.query(
         "INSERT INTO conversations (user_id) VALUES ($1) RETURNING *",
@@ -162,7 +161,6 @@ app.post("/api/chat", isAuthenticated, async (req, res) => {
       );
       convoId = newConvo.rows[0].id;
     } else {
-      // Ensure conversation belongs to user
       const check = await pool.query(
         "SELECT * FROM conversations WHERE id=$1 AND user_id=$2",
         [convoId, userId]
@@ -171,13 +169,11 @@ app.post("/api/chat", isAuthenticated, async (req, res) => {
         return res.status(403).json({ error: "Forbidden" });
     }
 
-    // Save user message
     await pool.query(
       "INSERT INTO messages (conversation_id, role, content) VALUES ($1,$2,$3)",
       [convoId, "user", message]
     );
 
-    // Get full history for memory
     const history = await pool.query(
       "SELECT role, content FROM messages WHERE conversation_id=$1 ORDER BY created_at ASC",
       [convoId]
@@ -213,9 +209,69 @@ app.post("/api/chat", isAuthenticated, async (req, res) => {
     );
 
     res.json({ conversationId: convoId, reply: aiReply });
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Chat failed" });
+  }
+});
+
+/* =========================
+   Easy Mobile Test Route
+========================= */
+
+app.get("/api/chat-easy", isAuthenticated, async (req, res) => {
+  try {
+    const message = req.query.message;
+    if (!message)
+      return res.status(400).json({ error: "Message query required" });
+
+    const userId = req.user.id;
+
+    const newConvo = await pool.query(
+      "INSERT INTO conversations (user_id) VALUES ($1) RETURNING *",
+      [userId]
+    );
+
+    const convoId = newConvo.rows[0].id;
+
+    await pool.query(
+      "INSERT INTO messages (conversation_id, role, content) VALUES ($1,$2,$3)",
+      [convoId, "user", message]
+    );
+
+    const aiRes = await fetch(
+      "https://openrouter.ai/api/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "openai/gpt-4o-mini",
+          messages: [
+            { role: "system", content: "You are Focus+, a productivity AI assistant." },
+            { role: "user", content: message },
+          ],
+        }),
+      }
+    );
+
+    const aiData = await aiRes.json();
+    const aiReply =
+      aiData?.choices?.[0]?.message?.content || "No response";
+
+    await pool.query(
+      "INSERT INTO messages (conversation_id, role, content) VALUES ($1,$2,$3)",
+      [convoId, "assistant", aiReply]
+    );
+
+    res.json({ conversationId: convoId, reply: aiReply });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Easy test failed" });
   }
 });
 
@@ -239,6 +295,7 @@ app.put("/api/conversations/:id", isAuthenticated, async (req, res) => {
       return res.status(404).json({ error: "Conversation not found" });
 
     res.json(result.rows[0]);
+
   } catch {
     res.status(500).json({ error: "Rename failed" });
   }
@@ -261,6 +318,7 @@ app.delete("/api/conversations/:id", isAuthenticated, async (req, res) => {
       return res.status(404).json({ error: "Conversation not found" });
 
     res.json({ message: "Conversation deleted" });
+
   } catch {
     res.status(500).json({ error: "Delete failed" });
   }
@@ -282,22 +340,18 @@ app.get("/api/conversations", isAuthenticated, async (req, res) => {
    Get Messages
 ========================= */
 
-app.get(
-  "/api/conversations/:id/messages",
-  isAuthenticated,
-  async (req, res) => {
-    const result = await pool.query(
-      `SELECT m.*
-       FROM messages m
-       JOIN conversations c ON m.conversation_id = c.id
-       WHERE m.conversation_id=$1 AND c.user_id=$2
-       ORDER BY m.created_at ASC`,
-      [req.params.id, req.user.id]
-    );
+app.get("/api/conversations/:id/messages", isAuthenticated, async (req, res) => {
+  const result = await pool.query(
+    `SELECT m.*
+     FROM messages m
+     JOIN conversations c ON m.conversation_id = c.id
+     WHERE m.conversation_id=$1 AND c.user_id=$2
+     ORDER BY m.created_at ASC`,
+    [req.params.id, req.user.id]
+  );
 
-    res.json(result.rows);
-  }
-);
+  res.json(result.rows);
+});
 
 /* =========================
    Start Server
