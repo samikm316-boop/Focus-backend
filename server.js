@@ -117,7 +117,7 @@ function isAuthenticated(req, res, next) {
 ========================= */
 
 app.get("/", (req, res) => {
-  res.send("Focus+ Backend is running 🚀");
+  res.send("Focus+ Backend v2 running 🚀");
 });
 
 app.get("/me", isAuthenticated, (req, res) => {
@@ -142,49 +142,7 @@ app.get(
 );
 
 /* =========================
-   Initialize DB
-========================= */
-
-app.get("/init-db", async (req, res) => {
-  try {
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS users (
-        id SERIAL PRIMARY KEY,
-        google_id TEXT UNIQUE,
-        name TEXT,
-        email TEXT UNIQUE,
-        profile_picture TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS conversations (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        title TEXT DEFAULT 'New Chat',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS messages (
-        id SERIAL PRIMARY KEY,
-        conversation_id INTEGER REFERENCES conversations(id) ON DELETE CASCADE,
-        role TEXT CHECK (role IN ('user','assistant')),
-        content TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-
-    res.json({ message: "Tables ready" });
-  } catch {
-    res.status(500).json({ error: "DB setup failed" });
-  }
-});
-
-/* =========================
-   AI CHAT (POST)
+   CHAT (WITH MEMORY)
 ========================= */
 
 app.post("/api/chat", isAuthenticated, async (req, res) => {
@@ -196,13 +154,21 @@ app.post("/api/chat", isAuthenticated, async (req, res) => {
     const userId = req.user.id;
     let convoId = conversationId;
 
-    // Create conversation if new
+    // Create new conversation if needed
     if (!convoId) {
       const newConvo = await pool.query(
         "INSERT INTO conversations (user_id) VALUES ($1) RETURNING *",
         [userId]
       );
       convoId = newConvo.rows[0].id;
+    } else {
+      // Ensure conversation belongs to user
+      const check = await pool.query(
+        "SELECT * FROM conversations WHERE id=$1 AND user_id=$2",
+        [convoId, userId]
+      );
+      if (check.rows.length === 0)
+        return res.status(403).json({ error: "Forbidden" });
     }
 
     // Save user message
@@ -211,43 +177,16 @@ app.post("/api/chat", isAuthenticated, async (req, res) => {
       [convoId, "user", message]
     );
 
-    /* ===== Generate Title (only first message) ===== */
+    // Get full history for memory
+    const history = await pool.query(
+      "SELECT role, content FROM messages WHERE conversation_id=$1 ORDER BY created_at ASC",
+      [convoId]
+    );
 
-    if (!conversationId) {
-      const titleRes = await fetch(
-        "https://openrouter.ai/api/v1/chat/completions",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: "openai/gpt-4o-mini",
-            messages: [
-              {
-                role: "system",
-                content:
-                  "Generate a short 3-5 word title for this conversation. No quotes.",
-              },
-              { role: "user", content: message },
-            ],
-            max_tokens: 20,
-          }),
-        }
-      );
-
-      const titleData = await titleRes.json();
-      const generatedTitle =
-        titleData?.choices?.[0]?.message?.content?.trim() || "New Chat";
-
-      await pool.query(
-        "UPDATE conversations SET title=$1 WHERE id=$2",
-        [generatedTitle, convoId]
-      );
-    }
-
-    /* ===== Main AI Reply ===== */
+    const formattedMessages = [
+      { role: "system", content: "You are Focus+, a productivity AI assistant." },
+      ...history.rows,
+    ];
 
     const aiRes = await fetch(
       "https://openrouter.ai/api/v1/chat/completions",
@@ -259,10 +198,7 @@ app.post("/api/chat", isAuthenticated, async (req, res) => {
         },
         body: JSON.stringify({
           model: "openai/gpt-4o-mini",
-          messages: [
-            { role: "system", content: "You are Focus+, a productivity AI assistant." },
-            { role: "user", content: message },
-          ],
+          messages: formattedMessages,
         }),
       }
     );
@@ -284,59 +220,49 @@ app.post("/api/chat", isAuthenticated, async (req, res) => {
 });
 
 /* =========================
-   Browser Test Route
+   Rename Conversation
 ========================= */
 
-app.get("/api/chat-test", isAuthenticated, async (req, res) => {
+app.put("/api/conversations/:id", isAuthenticated, async (req, res) => {
   try {
-    const message = req.query.message;
-    if (!message)
-      return res.status(400).json({ error: "Message query required" });
+    const { title } = req.body;
 
-    const userId = req.user.id;
-
-    const newConvo = await pool.query(
-      "INSERT INTO conversations (user_id) VALUES ($1) RETURNING *",
-      [userId]
+    const result = await pool.query(
+      `UPDATE conversations
+       SET title=$1
+       WHERE id=$2 AND user_id=$3
+       RETURNING *`,
+      [title, req.params.id, req.user.id]
     );
 
-    const convoId = newConvo.rows[0].id;
+    if (result.rows.length === 0)
+      return res.status(404).json({ error: "Conversation not found" });
 
-    await pool.query(
-      "INSERT INTO messages (conversation_id, role, content) VALUES ($1,$2,$3)",
-      [convoId, "user", message]
-    );
-
-    const aiRes = await fetch(
-      "https://openrouter.ai/api/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "openai/gpt-4o-mini",
-          messages: [
-            { role: "system", content: "You are Focus+, a productivity AI assistant." },
-            { role: "user", content: message },
-          ],
-        }),
-      }
-    );
-
-    const aiData = await aiRes.json();
-    const aiReply =
-      aiData?.choices?.[0]?.message?.content || "No response";
-
-    await pool.query(
-      "INSERT INTO messages (conversation_id, role, content) VALUES ($1,$2,$3)",
-      [convoId, "assistant", aiReply]
-    );
-
-    res.json({ conversationId: convoId, reply: aiReply });
+    res.json(result.rows[0]);
   } catch {
-    res.status(500).json({ error: "Test chat failed" });
+    res.status(500).json({ error: "Rename failed" });
+  }
+});
+
+/* =========================
+   Delete Conversation
+========================= */
+
+app.delete("/api/conversations/:id", isAuthenticated, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `DELETE FROM conversations
+       WHERE id=$1 AND user_id=$2
+       RETURNING *`,
+      [req.params.id, req.user.id]
+    );
+
+    if (result.rows.length === 0)
+      return res.status(404).json({ error: "Conversation not found" });
+
+    res.json({ message: "Conversation deleted" });
+  } catch {
+    res.status(500).json({ error: "Delete failed" });
   }
 });
 
