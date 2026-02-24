@@ -213,8 +213,7 @@ app.post("/api/chat", isAuthenticated, async (req, res) => {
    Streaming Chat
 ========================= */
 
-app.post("/api/chat-stream", isAuthenticated, async (req, res) => {
-  try {
+app.post("/api/chat-stream", async (req, res) => {
     const { message, conversationId } = req.body;
     if (!message)
       return res.status(400).json({ error: "Message required" });
