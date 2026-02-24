@@ -214,6 +214,8 @@ app.post("/api/chat", isAuthenticated, async (req, res) => {
 ========================= */
 
 app.post("/api/chat-stream", async (req, res) => {
+  try {
+
     const { message, conversationId } = req.body;
     if (!message)
       return res.status(400).json({ error: "Message required" });
@@ -297,7 +299,6 @@ app.post("/api/chat-stream", async (req, res) => {
     res.status(500).json({ error: "Streaming failed" });
   }
 });
-
 /* =========================
    Start Server
 ========================= */
