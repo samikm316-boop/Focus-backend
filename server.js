@@ -218,7 +218,7 @@ app.post("/api/chat-stream", async (req, res) => {
     if (!message)
       return res.status(400).json({ error: "Message required" });
 
-    const userId = req.user.id;
+    const userId = 1;
     let convoId = conversationId;
 
     if (!convoId) {
