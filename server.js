@@ -151,7 +151,7 @@ app.post("/api/chat", isAuthenticated, async (req, res) => {
     if (!message)
       return res.status(400).json({ error: "Message required" });
 
-    const userId = req.user.id;
+    const userId = 1; // temporary test user
     let convoId = conversationId;
 
     if (!convoId) {
