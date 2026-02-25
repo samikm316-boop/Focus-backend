@@ -308,6 +308,51 @@ res.write(`__CONVO_ID__:${convoId}\n`);
 });
 
 /* =========================
+   GET CONVERSATIONS
+========================= */
+
+app.get("/api/conversations", async (req, res) => {
+  try {
+    const userId = 1; // temporary
+
+    const result = await pool.query(
+      `SELECT id, created_at
+       FROM conversations
+       WHERE user_id = $1
+       ORDER BY created_at DESC`,
+      [userId]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch conversations" });
+  }
+});
+
+/* =========================
+   GET MESSAGES
+========================= */
+
+app.get("/api/messages/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `SELECT role, content
+       FROM messages
+       WHERE conversation_id = $1
+       ORDER BY created_at ASC`,
+      [id]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch messages" });
+  }
+});
+/* =========================
    GET ALL CONVERSATIONS
 ========================= */
 
