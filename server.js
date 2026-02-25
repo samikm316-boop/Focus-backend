@@ -192,6 +192,22 @@ app.get("/", (req, res) => {
   res.send("Focus+ Backend v6 running 🚀");
 });
 
+/* =========================
+   Google Auth Routes
+========================= */
+
+app.get(
+  "/auth/google",
+  passport.authenticate("google", { scope: ["profile", "email"] })
+);
+
+app.get(
+  "/auth/google/callback",
+  passport.authenticate("google", { failureRedirect: "/" }),
+  (req, res) => {
+    res.redirect("/me");
+  }
+);
 app.get("/me", isAuthenticated, (req, res) => {
   res.json(req.user);
 });
