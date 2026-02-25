@@ -18,12 +18,16 @@ const app = express();
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ssl: process.env.NODE_ENV === "production"
+    ? { rejectUnauthorized: false }
+    : false,
 });
 
 /* =========================
    Middleware
 ========================= */
+
+app.set("trust proxy", 1);
 
 app.use(
   cors({
@@ -33,7 +37,6 @@ app.use(
 );
 
 app.use(express.json());
-app.set("trust proxy", 1);
 
 app.use(
   session({
@@ -41,9 +44,9 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: true,
+      secure: process.env.NODE_ENV === "production",
       httpOnly: true,
-      sameSite: "none",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
     },
   })
 );
@@ -52,7 +55,7 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 /* =========================
-   Passport
+   Passport Setup
 ========================= */
 
 passport.serializeUser((user, done) => {
@@ -84,8 +87,8 @@ passport.use(
         const result = await pool.query(
           `INSERT INTO users (google_id, name, email, profile_picture)
            VALUES ($1,$2,$3,$4)
-           ON CONFLICT (google_id) DO UPDATE
-           SET name = EXCLUDED.name
+           ON CONFLICT (google_id)
+           DO UPDATE SET name = EXCLUDED.name
            RETURNING *`,
           [
             profile.id,
@@ -113,11 +116,11 @@ function isAuthenticated(req, res, next) {
 }
 
 /* =========================
-   Basic Routes
+   Routes
 ========================= */
 
 app.get("/", (req, res) => {
-  res.send("Focus+ Backend v4 running 🚀");
+  res.send("Focus+ Backend v5 running 🚀");
 });
 
 app.get("/me", isAuthenticated, (req, res) => {
@@ -125,7 +128,7 @@ app.get("/me", isAuthenticated, (req, res) => {
 });
 
 /* =========================
-   Google Auth
+   Google Auth Routes
 ========================= */
 
 app.get(
@@ -142,10 +145,10 @@ app.get(
 );
 
 /* =========================
-   Normal Chat
+   NORMAL CHAT
 ========================= */
 
-app.post("/api/chat", isAuthenticated, async (req, res) => {
+app.post("/api/chat", async (req, res) => {
   try {
     const { message, conversationId } = req.body;
     if (!message)
@@ -156,7 +159,7 @@ app.post("/api/chat", isAuthenticated, async (req, res) => {
 
     if (!convoId) {
       const newConvo = await pool.query(
-        "INSERT INTO conversations (user_id) VALUES ($1) RETURNING *",
+        "INSERT INTO conversations (user_id) VALUES ($1) RETURNING id",
         [userId]
       );
       convoId = newConvo.rows[0].id;
@@ -204,28 +207,27 @@ app.post("/api/chat", isAuthenticated, async (req, res) => {
     res.json({ conversationId: convoId, reply: aiReply });
 
   } catch (err) {
-    console.error(err);
+    console.error("Chat error:", err);
     res.status(500).json({ error: "Chat failed" });
   }
 });
 
 /* =========================
-   Streaming Chat
+   STREAMING CHAT
 ========================= */
 
 app.post("/api/chat-stream", async (req, res) => {
   try {
-
     const { message, conversationId } = req.body;
     if (!message)
       return res.status(400).json({ error: "Message required" });
 
-    const userId = 1;
+    const userId = 1; // temporary test user
     let convoId = conversationId;
 
     if (!convoId) {
       const newConvo = await pool.query(
-        "INSERT INTO conversations (user_id) VALUES ($1) RETURNING *",
+        "INSERT INTO conversations (user_id) VALUES ($1) RETURNING id",
         [userId]
       );
       convoId = newConvo.rows[0].id;
@@ -264,6 +266,7 @@ app.post("/api/chat-stream", async (req, res) => {
 
     res.setHeader("Content-Type", "text/plain");
     res.setHeader("Transfer-Encoding", "chunked");
+    res.setHeader("x-conversation-id", convoId);
 
     let fullReply = "";
 
@@ -271,19 +274,20 @@ app.post("/api/chat-stream", async (req, res) => {
       const lines = chunk.toString().split("\n");
 
       for (const line of lines) {
-        if (line.startsWith("data: ")) {
-          const data = line.replace("data: ", "").trim();
-          if (data === "[DONE]") break;
+        if (!line.startsWith("data: ")) continue;
 
-          try {
-            const parsed = JSON.parse(data);
-            const content = parsed.choices?.[0]?.delta?.content;
-            if (content) {
-              fullReply += content;
-              res.write(content);
-            }
-          } catch {}
-        }
+        const data = line.replace("data: ", "").trim();
+        if (data === "[DONE]") continue;
+
+        try {
+          const parsed = JSON.parse(data);
+          const content = parsed.choices?.[0]?.delta?.content;
+
+          if (content) {
+            fullReply += content;
+            res.write(content);
+          }
+        } catch {}
       }
     }
 
@@ -295,8 +299,10 @@ app.post("/api/chat-stream", async (req, res) => {
     res.end();
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Streaming failed" });
+    console.error("Streaming error:", err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Streaming failed" });
+    }
   }
 });
 
