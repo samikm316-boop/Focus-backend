@@ -13,7 +13,7 @@ const { Pool } = pkg;
 const app = express();
 
 /* =========================
-   Database
+   DATABASE
 ========================= */
 
 const pool = new Pool({
@@ -33,36 +33,30 @@ async function runMigrations() {
     console.log("Running DB migrations...");
 
     await pool.query(`
-      ALTER TABLE conversations
-      ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'ai';
-    `);
-
-    await pool.query(`
-      ALTER TABLE conversations
-      ADD COLUMN IF NOT EXISTS title TEXT DEFAULT 'New Chat';
-    `);
-
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS groups (
+      CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
-        name TEXT NOT NULL,
+        google_id TEXT UNIQUE,
+        name TEXT,
+        email TEXT,
+        profile_picture TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
 
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS group_members (
+      CREATE TABLE IF NOT EXISTS conversations (
         id SERIAL PRIMARY KEY,
-        group_id INTEGER REFERENCES groups(id) ON DELETE CASCADE,
-        user_id INTEGER,
-        joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        type TEXT DEFAULT 'ai',
+        title TEXT DEFAULT 'New Chat',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
 
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS group_messages (
+      CREATE TABLE IF NOT EXISTS messages (
         id SERIAL PRIMARY KEY,
-        group_id INTEGER REFERENCES groups(id) ON DELETE CASCADE,
+        conversation_id INTEGER REFERENCES conversations(id) ON DELETE CASCADE,
         role TEXT,
         content TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -76,7 +70,7 @@ async function runMigrations() {
 }
 
 /* =========================
-   Middleware
+   MIDDLEWARE
 ========================= */
 
 app.set("trust proxy", 1);
@@ -107,18 +101,18 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 /* =========================
-   Passport
+   PASSPORT GOOGLE
 ========================= */
 
 passport.serializeUser((user, done) => {
-  done(null, user.google_id);
+  done(null, user.id);
 });
 
-passport.deserializeUser(async (googleId, done) => {
+passport.deserializeUser(async (id, done) => {
   try {
     const result = await pool.query(
-      "SELECT * FROM users WHERE google_id = $1",
-      [googleId]
+      "SELECT * FROM users WHERE id = $1",
+      [id]
     );
     done(null, result.rows[0]);
   } catch (err) {
@@ -159,7 +153,7 @@ passport.use(
 );
 
 /* =========================
-   Auth Middleware
+   AUTH MIDDLEWARE
 ========================= */
 
 function isAuthenticated(req, res, next) {
@@ -168,7 +162,7 @@ function isAuthenticated(req, res, next) {
 }
 
 /* =========================
-   Helper: System Prompt Per Mode
+   SYSTEM PROMPTS
 ========================= */
 
 function getSystemPrompt(type) {
@@ -177,23 +171,21 @@ function getSystemPrompt(type) {
       return "You are Focus+, a friendly teacher. Explain clearly with structured steps and examples.";
     case "workout":
       return "You are Focus+, a certified fitness trainer. Give safe, clear exercise guidance.";
-    case "group":
-      return "You are Focus+, assisting inside a group chat. Keep responses concise and collaborative.";
     default:
       return "You are Focus+, a powerful productivity AI assistant.";
   }
 }
 
 /* =========================
-   Base Routes
+   BASE ROUTE
 ========================= */
 
 app.get("/", (req, res) => {
-  res.send("Focus+ Backend v6 running 🚀");
+  res.send("Focus+ Backend v7 running 🚀");
 });
 
 /* =========================
-   Google Auth Routes
+   AUTH ROUTES
 ========================= */
 
 app.get(
@@ -208,21 +200,23 @@ app.get(
     res.redirect("/me");
   }
 );
+
 app.get("/me", isAuthenticated, (req, res) => {
   res.json(req.user);
 });
 
 /* =========================
-   AI CHAT (Normal)
+   AI CHAT
 ========================= */
 
 app.post("/api/chat", isAuthenticated, async (req, res) => {
   try {
     const { message, conversationId, type = "ai" } = req.body;
+
     if (!message)
       return res.status(400).json({ error: "Message required" });
 
-    const userId = 1;
+    const userId = req.user.id;
     let convoId = conversationId;
 
     if (!convoId) {
@@ -280,109 +274,12 @@ app.post("/api/chat", isAuthenticated, async (req, res) => {
 });
 
 /* =========================
-   AI CHAT (Streaming)
-========================= */
-
-app.post("/api/chat-stream", async (req, res) => {
-  try {
-    const { message, conversationId, type = "ai" } = req.body;
-    if (!message)
-      return res.status(400).json({ error: "Message required" });
-
-    if (!req.user) {
-  return res.status(401).json({ error: "Unauthorized" });
-}
-
-const userId = req.user.id;
-    let convoId = conversationId;
-
-    if (!convoId) {
-      const newConvo = await pool.query(
-        "INSERT INTO conversations (user_id, type) VALUES ($1,$2) RETURNING id",
-        [userId, type]
-      );
-      convoId = newConvo.rows[0].id;
-    }
-
-    await pool.query(
-      "INSERT INTO messages (conversation_id, role, content) VALUES ($1,$2,$3)",
-      [convoId, "user", message]
-    );
-
-    const history = await pool.query(
-      "SELECT role, content FROM messages WHERE conversation_id=$1 ORDER BY created_at ASC",
-      [convoId]
-    );
-
-    const formattedMessages = [
-      { role: "system", content: getSystemPrompt(type) },
-      ...history.rows,
-    ];
-
-    const aiRes = await fetch(
-      "https://openrouter.ai/api/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "openai/gpt-4o-mini",
-          messages: formattedMessages,
-          stream: true,
-        }),
-      }
-    );
-
-    res.setHeader("Content-Type", "text/plain");
-    res.setHeader("Transfer-Encoding", "chunked");
-    res.write(`__CONVO_ID__:${convoId}\n`);
-
-    let fullReply = "";
-
-    for await (const chunk of aiRes.body) {
-      const lines = chunk.toString().split("\n");
-
-      for (const line of lines) {
-        if (!line.startsWith("data: ")) continue;
-
-        const data = line.replace("data: ", "").trim();
-        if (data === "[DONE]") continue;
-
-        try {
-          const parsed = JSON.parse(data);
-          const content = parsed.choices?.[0]?.delta?.content;
-
-          if (content) {
-            fullReply += content;
-            res.write(content);
-          }
-        } catch {}
-      }
-    }
-
-    await pool.query(
-      "INSERT INTO messages (conversation_id, role, content) VALUES ($1,$2,$3)",
-      [convoId, "assistant", fullReply]
-    );
-
-    res.end();
-  } catch (err) {
-    console.error("Streaming error:", err);
-    if (!res.headersSent) {
-      res.status(500).json({ error: "Streaming failed" });
-    }
-  }
-});
-
-/* =========================
    GET CONVERSATIONS
 ========================= */
 
-app.get("/api/conversations", async (req, res) => {
+app.get("/api/conversations", isAuthenticated, async (req, res) => {
   try {
-    const userId = 1;
+    const userId = req.user.id;
 
     const result = await pool.query(
       `SELECT id, type, title, created_at
@@ -403,27 +300,31 @@ app.get("/api/conversations", async (req, res) => {
    GET MESSAGES
 ========================= */
 
-app.get("/api/messages/:conversationId", async (req, res) => {
-  try {
-    const { conversationId } = req.params;
+app.get(
+  "/api/messages/:conversationId",
+  isAuthenticated,
+  async (req, res) => {
+    try {
+      const { conversationId } = req.params;
 
-    const result = await pool.query(
-      `SELECT role, content
-       FROM messages
-       WHERE conversation_id = $1
-       ORDER BY created_at ASC`,
-      [conversationId]
-    );
+      const result = await pool.query(
+        `SELECT role, content
+         FROM messages
+         WHERE conversation_id = $1
+         ORDER BY created_at ASC`,
+        [conversationId]
+      );
 
-    res.json(result.rows);
-  } catch (err) {
-    console.error("Fetch messages error:", err);
-    res.status(500).json({ error: "Failed to fetch messages" });
+      res.json(result.rows);
+    } catch (err) {
+      console.error("Fetch messages error:", err);
+      res.status(500).json({ error: "Failed to fetch messages" });
+    }
   }
-});
+);
 
 /* =========================
-   Start Server
+   START SERVER
 ========================= */
 
 const PORT = process.env.PORT || 3000;
