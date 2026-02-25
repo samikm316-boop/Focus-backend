@@ -18,10 +18,62 @@ const app = express();
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === "production"
-    ? { rejectUnauthorized: false }
-    : false,
+  ssl:
+    process.env.NODE_ENV === "production"
+      ? { rejectUnauthorized: false }
+      : false,
 });
+
+/* =========================
+   AUTO MIGRATIONS
+========================= */
+
+async function runMigrations() {
+  try {
+    console.log("Running DB migrations...");
+
+    await pool.query(`
+      ALTER TABLE conversations
+      ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'ai';
+    `);
+
+    await pool.query(`
+      ALTER TABLE conversations
+      ADD COLUMN IF NOT EXISTS title TEXT DEFAULT 'New Chat';
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS groups (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS group_members (
+        id SERIAL PRIMARY KEY,
+        group_id INTEGER REFERENCES groups(id) ON DELETE CASCADE,
+        user_id INTEGER,
+        joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS group_messages (
+        id SERIAL PRIMARY KEY,
+        group_id INTEGER REFERENCES groups(id) ON DELETE CASCADE,
+        role TEXT,
+        content TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    console.log("DB migrations complete.");
+  } catch (err) {
+    console.error("Migration error:", err);
+  }
+}
 
 /* =========================
    Middleware
@@ -55,7 +107,7 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 /* =========================
-   Passport Setup
+   Passport
 ========================= */
 
 passport.serializeUser((user, done) => {
@@ -116,11 +168,28 @@ function isAuthenticated(req, res, next) {
 }
 
 /* =========================
-   Routes
+   Helper: System Prompt Per Mode
+========================= */
+
+function getSystemPrompt(type) {
+  switch (type) {
+    case "study":
+      return "You are Focus+, a friendly teacher. Explain clearly with structured steps and examples.";
+    case "workout":
+      return "You are Focus+, a certified fitness trainer. Give safe, clear exercise guidance.";
+    case "group":
+      return "You are Focus+, assisting inside a group chat. Keep responses concise and collaborative.";
+    default:
+      return "You are Focus+, a powerful productivity AI assistant.";
+  }
+}
+
+/* =========================
+   Base Routes
 ========================= */
 
 app.get("/", (req, res) => {
-  res.send("Focus+ Backend v5 running 🚀");
+  res.send("Focus+ Backend v6 running 🚀");
 });
 
 app.get("/me", isAuthenticated, (req, res) => {
@@ -128,39 +197,22 @@ app.get("/me", isAuthenticated, (req, res) => {
 });
 
 /* =========================
-   Google Auth Routes
-========================= */
-
-app.get(
-  "/auth/google",
-  passport.authenticate("google", { scope: ["profile", "email"] })
-);
-
-app.get(
-  "/auth/google/callback",
-  passport.authenticate("google", { failureRedirect: "/" }),
-  (req, res) => {
-    res.redirect("/me");
-  }
-);
-
-/* =========================
-   NORMAL CHAT
+   AI CHAT (Normal)
 ========================= */
 
 app.post("/api/chat", async (req, res) => {
   try {
-    const { message, conversationId } = req.body;
+    const { message, conversationId, type = "ai" } = req.body;
     if (!message)
       return res.status(400).json({ error: "Message required" });
 
-    const userId = 1; // temporary test user
+    const userId = 1;
     let convoId = conversationId;
 
     if (!convoId) {
       const newConvo = await pool.query(
-        "INSERT INTO conversations (user_id) VALUES ($1) RETURNING id",
-        [userId]
+        "INSERT INTO conversations (user_id, type) VALUES ($1,$2) RETURNING id",
+        [userId, type]
       );
       convoId = newConvo.rows[0].id;
     }
@@ -176,7 +228,7 @@ app.post("/api/chat", async (req, res) => {
     );
 
     const formattedMessages = [
-      { role: "system", content: "You are Focus+, a productivity AI assistant." },
+      { role: "system", content: getSystemPrompt(type) },
       ...history.rows,
     ];
 
@@ -205,7 +257,6 @@ app.post("/api/chat", async (req, res) => {
     );
 
     res.json({ conversationId: convoId, reply: aiReply });
-
   } catch (err) {
     console.error("Chat error:", err);
     res.status(500).json({ error: "Chat failed" });
@@ -213,22 +264,22 @@ app.post("/api/chat", async (req, res) => {
 });
 
 /* =========================
-   STREAMING CHAT
+   AI CHAT (Streaming)
 ========================= */
 
 app.post("/api/chat-stream", async (req, res) => {
   try {
-    const { message, conversationId } = req.body;
+    const { message, conversationId, type = "ai" } = req.body;
     if (!message)
       return res.status(400).json({ error: "Message required" });
 
-    const userId = 1; // temporary test user
+    const userId = 1;
     let convoId = conversationId;
 
     if (!convoId) {
       const newConvo = await pool.query(
-        "INSERT INTO conversations (user_id) VALUES ($1) RETURNING id",
-        [userId]
+        "INSERT INTO conversations (user_id, type) VALUES ($1,$2) RETURNING id",
+        [userId, type]
       );
       convoId = newConvo.rows[0].id;
     }
@@ -244,7 +295,7 @@ app.post("/api/chat-stream", async (req, res) => {
     );
 
     const formattedMessages = [
-      { role: "system", content: "You are Focus+, a productivity AI assistant." },
+      { role: "system", content: getSystemPrompt(type) },
       ...history.rows,
     ];
 
@@ -265,10 +316,9 @@ app.post("/api/chat-stream", async (req, res) => {
     );
 
     res.setHeader("Content-Type", "text/plain");
-res.setHeader("Transfer-Encoding", "chunked");
+    res.setHeader("Transfer-Encoding", "chunked");
+    res.write(`__CONVO_ID__:${convoId}\n`);
 
-// Send conversation ID as first chunk
-res.write(`__CONVO_ID__:${convoId}\n`);
     let fullReply = "";
 
     for await (const chunk of aiRes.body) {
@@ -298,7 +348,6 @@ res.write(`__CONVO_ID__:${convoId}\n`);
     );
 
     res.end();
-
   } catch (err) {
     console.error("Streaming error:", err);
     if (!res.headersSent) {
@@ -313,55 +362,10 @@ res.write(`__CONVO_ID__:${convoId}\n`);
 
 app.get("/api/conversations", async (req, res) => {
   try {
-    const userId = 1; // temporary
+    const userId = 1;
 
     const result = await pool.query(
-      `SELECT id, created_at
-       FROM conversations
-       WHERE user_id = $1
-       ORDER BY created_at DESC`,
-      [userId]
-    );
-
-    res.json(result.rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to fetch conversations" });
-  }
-});
-
-/* =========================
-   GET MESSAGES
-========================= */
-
-app.get("/api/messages/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const result = await pool.query(
-      `SELECT role, content
-       FROM messages
-       WHERE conversation_id = $1
-       ORDER BY created_at ASC`,
-      [id]
-    );
-
-    res.json(result.rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to fetch messages" });
-  }
-});
-/* =========================
-   GET ALL CONVERSATIONS
-========================= */
-
-app.get("/api/conversations", async (req, res) => {
-  try {
-    const userId = 1; // temporary test user
-
-    const result = await pool.query(
-      `SELECT id, created_at
+      `SELECT id, type, title, created_at
        FROM conversations
        WHERE user_id = $1
        ORDER BY created_at DESC`,
@@ -376,7 +380,7 @@ app.get("/api/conversations", async (req, res) => {
 });
 
 /* =========================
-   GET MESSAGES BY CONVERSATION
+   GET MESSAGES
 ========================= */
 
 app.get("/api/messages/:conversationId", async (req, res) => {
@@ -397,12 +401,14 @@ app.get("/api/messages/:conversationId", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch messages" });
   }
 });
+
 /* =========================
    Start Server
 ========================= */
 
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
+  await runMigrations();
 });
