@@ -216,7 +216,7 @@ app.get("/me", isAuthenticated, (req, res) => {
    AI CHAT (Normal)
 ========================= */
 
-app.post("/api/chat", async (req, res) => {
+app.post("/api/chat", isAuthenticated, async (req, res) => {
   try {
     const { message, conversationId, type = "ai" } = req.body;
     if (!message)
@@ -289,7 +289,11 @@ app.post("/api/chat-stream", async (req, res) => {
     if (!message)
       return res.status(400).json({ error: "Message required" });
 
-    const userId = 1;
+    if (!req.user) {
+  return res.status(401).json({ error: "Unauthorized" });
+}
+
+const userId = req.user.id;
     let convoId = conversationId;
 
     if (!convoId) {
