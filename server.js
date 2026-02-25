@@ -265,9 +265,10 @@ app.post("/api/chat-stream", async (req, res) => {
     );
 
     res.setHeader("Content-Type", "text/plain");
-    res.setHeader("Transfer-Encoding", "chunked");
-    res.setHeader("x-conversation-id", convoId);
+res.setHeader("Transfer-Encoding", "chunked");
 
+// Send conversation ID as first chunk
+res.write(`__CONVO_ID__:${convoId}\n`);
     let fullReply = "";
 
     for await (const chunk of aiRes.body) {
