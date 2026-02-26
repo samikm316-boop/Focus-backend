@@ -2,7 +2,7 @@ import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import { pool } from "./db.js"; // your PostgreSQL pool
 
-// Use BASE_URL from Railway variables
+// Use BASE_URL from Railway variables with fallback
 const BASE_URL = process.env.BASE_URL || "https://focus-backend-production-b26c.up.railway.app";
 
 /* =========================
@@ -27,7 +27,8 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: `${BASE_URL}/auth/google/callback`
+      callbackURL: `${BASE_URL}/auth/google/callback`,
+      proxy: true // ✅ Required for Railway/Heroku to handle HTTPS correctly
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
