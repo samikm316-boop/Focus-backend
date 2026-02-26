@@ -7,14 +7,14 @@ const router = express.Router();
    GOOGLE AUTH ROUTE
 ========================= */
 
-router.get("/google", (req, res, next) => {
-  const prompt = req.query.prompt || "select_account";
-
+router.get(
+  "/google",
   passport.authenticate("google", {
     scope: ["profile", "email"],
-    prompt
-  })(req, res, next);
-});
+    prompt: "select_account",
+    accessType: "offline"
+  })
+);
 
 /* =========================
    GOOGLE CALLBACK
@@ -22,9 +22,11 @@ router.get("/google", (req, res, next) => {
 
 router.get(
   "/google/callback",
-  passport.authenticate("google", { failureRedirect: "/" }),
+  passport.authenticate("google", {
+    failureRedirect: "/",
+    session: true
+  }),
   (req, res) => {
-    // After successful login redirect to user endpoint
     res.redirect("/api/users/me");
   }
 );
