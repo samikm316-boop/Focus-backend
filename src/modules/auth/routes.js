@@ -6,14 +6,13 @@ const router = express.Router();
 /* =========================
    GOOGLE LOGIN
 ========================= */
-router.get(
-  "/google",
-  passport.authenticate("google", {
-    scope: ["profile", "email"], // required
-    prompt: "select_account",     // always ask which account
-    accessType: "offline"         // allows refresh token
-  })
-);
+router.get("/google", (req, res, next) => {
+  // Use function-style authenticate to ensure scope works in ES Modules + Railway
+  passport.authenticate("google", ["profile", "email"], {
+    prompt: "select_account", // always ask which account
+    accessType: "offline"     // allows refresh token
+  })(req, res, next);
+});
 
 /* =========================
    GOOGLE CALLBACK
