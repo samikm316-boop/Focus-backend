@@ -1,9 +1,6 @@
 import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import { pool } from "./db.js"; // your PostgreSQL pool
-import dotenv from "dotenv";
-
-dotenv.config();
 
 /* =========================
    SESSION SERIALIZATION
@@ -24,12 +21,14 @@ passport.deserializeUser(async (id, done) => {
 /* =========================
    GOOGLE STRATEGY
 ========================= */
+const BASE_URL = process.env.BASE_URL || "https://focus-backend-production-b26c.up.railway.app";
+
 passport.use(
   new GoogleStrategy(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: `${process.env.BASE_URL}/auth/google/callback`
+      callbackURL: `${BASE_URL}/auth/google/callback`
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
@@ -53,3 +52,5 @@ passport.use(
     }
   )
 );
+
+console.log("✅ Passport Google Strategy configured with BASE_URL:", BASE_URL);
