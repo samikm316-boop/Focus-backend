@@ -1,34 +1,37 @@
 import express from "express";
 import passport from "passport";
 
-console.log("AUTH VERSION 3");
+console.log("AUTH VERSION 4"); // updated version
 const router = express.Router();
 
 /* =========================
    GOOGLE AUTH ROUTE
 ========================= */
-
 router.get(
   "/google",
   passport.authenticate("google", {
-    scope: ["profile", "email"],
-    prompt: "select_account",
-    accessType: "offline"
+    scope: ["profile", "email"], // required to get user info
+    prompt: "select_account",     // forces account selection every time
+    accessType: "offline"         // allows refresh token
   })
 );
 
 /* =========================
    GOOGLE CALLBACK
 ========================= */
-
 router.get(
   "/google/callback",
   passport.authenticate("google", {
-    failureRedirect: "/",
+    failureRedirect: "/",  // redirect on failure
     session: true
   }),
   (req, res) => {
-    res.redirect("/api/users/me");
+    // Redirect to user info if logged in, fallback to home
+    if (req.user) {
+      res.redirect("/api/users/me"); // logged-in user endpoint
+    } else {
+      res.redirect("/");
+    }
   }
 );
 
