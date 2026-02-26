@@ -1,6 +1,7 @@
 import express from "express";
 import passport from "passport";
 
+console.log("AUTH VERSION 3");
 const router = express.Router();
 
 /* =========================
