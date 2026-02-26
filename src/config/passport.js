@@ -2,12 +2,13 @@ import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import { pool } from "./db.js"; // your PostgreSQL pool
 
+// Use BASE_URL from Railway variables
+const BASE_URL = process.env.BASE_URL || "https://focus-backend-production-b26c.up.railway.app";
+
 /* =========================
    SESSION SERIALIZATION
 ========================= */
-passport.serializeUser((user, done) => {
-  done(null, user.id);
-});
+passport.serializeUser((user, done) => done(null, user.id));
 
 passport.deserializeUser(async (id, done) => {
   try {
@@ -21,8 +22,6 @@ passport.deserializeUser(async (id, done) => {
 /* =========================
    GOOGLE STRATEGY
 ========================= */
-const BASE_URL = process.env.BASE_URL || "https://focus-backend-production-b26c.up.railway.app";
-
 passport.use(
   new GoogleStrategy(
     {
