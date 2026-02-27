@@ -2,6 +2,10 @@ import express from "express";
 import cors from "cors";
 import session from "express-session";
 import passport from "passport";
+import dotenv from "dotenv";
+
+// Load env variables
+dotenv.config();
 
 // Import Passport config
 import "./src/config/passport.js";
@@ -11,6 +15,7 @@ import authRoutes from "./src/modules/auth/routes.js";
 import userRoutes from "./src/modules/users/routes.js";
 import chatRoutes from "./src/modules/chat/routes.js";
 import xpRoutes from "./src/modules/xp/routes.js";
+import adminRoutes from "./src/modules/admin/routes.js"; // ✅ TEMP MIGRATION ROUTE
 
 const app = express();
 
@@ -25,7 +30,7 @@ app.set("trust proxy", 1);
 app.use(
   cors({
     origin: true,
-    credentials: true
+    credentials: true,
   })
 );
 
@@ -35,21 +40,21 @@ app.use(
 app.use(express.json());
 
 /* =========================
-   SESSION (FIXED FOR CHROME)
+   SESSION (RAILWAY + CHROME SAFE)
 ========================= */
 app.use(
   session({
-    name: "focusplus.sid", // custom session name (cleaner)
+    name: "focusplus.sid",
     secret: process.env.SESSION_SECRET || "focusplussecret",
     resave: false,
     saveUninitialized: false,
     proxy: true,
     cookie: {
-      secure: true,       // ALWAYS TRUE on Railway (HTTPS)
+      secure: true,      // Railway is HTTPS
       httpOnly: true,
-      sameSite: "none",   // REQUIRED for Google OAuth
-      maxAge: 1000 * 60 * 60 * 24 // 1 day
-    }
+      sameSite: "none",  // Required for Google OAuth
+      maxAge: 1000 * 60 * 60 * 24, // 1 day
+    },
   })
 );
 
@@ -73,6 +78,7 @@ app.use("/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/xp", xpRoutes);
+app.use("/admin", adminRoutes); // ✅ TEMP - REMOVE AFTER MIGRATION
 
 /* =========================
    SERVER START
