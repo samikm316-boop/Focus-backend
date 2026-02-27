@@ -1,10 +1,16 @@
 import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
-import { pool } from "./db.js";
+import { pool } from "./db.js"; // your PostgreSQL pool
 
+// Use BASE_URL from Railway variables
 const BASE_URL = process.env.BASE_URL || "https://focus-backend-production-b26c.up.railway.app";
 
-passport.serializeUser((user, done) => done(null, user.id));
+/* =========================
+   SESSION SERIALIZATION
+========================= */
+passport.serializeUser((user, done) => {
+  done(null, user.id);
+});
 
 passport.deserializeUser(async (id, done) => {
   try {
@@ -15,16 +21,22 @@ passport.deserializeUser(async (id, done) => {
   }
 });
 
+/* =========================
+   GOOGLE STRATEGY
+========================= */
 passport.use(
   new GoogleStrategy(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
       callbackURL: `${BASE_URL}/auth/google/callback`,
-      proxy: true
+      proxy: true,               // Important for Railway HTTPS
+      accessType: "offline",     // Get refresh token
+      prompt: "select_account"   // Force account selection
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
+        // Insert user or update if already exists
         const result = await pool.query(
           `INSERT INTO users (google_id, name, email, profile_picture)
            VALUES ($1, $2, $3, $4)
@@ -38,6 +50,7 @@ passport.use(
             profile.photos?.[0]?.value
           ]
         );
+
         done(null, result.rows[0]);
       } catch (err) {
         done(err, null);
