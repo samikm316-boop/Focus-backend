@@ -78,7 +78,6 @@ app.use("/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/xp", xpRoutes);
-app.use("/admin", adminRoutes); // ✅ TEMP - REMOVE AFTER MIGRATION
 
 /* =========================
    SERVER START
