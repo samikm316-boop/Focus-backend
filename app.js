@@ -15,7 +15,7 @@ import authRoutes from "./src/modules/auth/routes.js";
 import userRoutes from "./src/modules/users/routes.js";
 import chatRoutes from "./src/modules/chat/routes.js";
 import xpRoutes from "./src/modules/xp/routes.js";
-import adminRoutes from "./src/modules/admin/routes.js"; // ✅ TEMP MIGRATION ROUTE
+
 
 const app = express();
 
