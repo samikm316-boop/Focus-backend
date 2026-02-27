@@ -4,15 +4,15 @@ import passport from "passport";
 const router = express.Router();
 
 /* =========================
-   GOOGLE LOGIN (FORCE ACCOUNT SELECTION)
+   GOOGLE LOGIN
+   Forces account selection
 ========================= */
 router.get("/google", (req, res, next) => {
   passport.authenticate("google", {
-    // MUST be inside the object
-    scope: ["profile", "email"],  
-    prompt: "select_account",       // force account chooser
-    accessType: "offline",          // allow refresh token
-    includeGrantedScopes: true
+    scope: ["profile", "email"],  // required by Google
+    prompt: "select_account",      // always ask which account
+    accessType: "offline",         // allow refresh token
+    includeGrantedScopes: true     // optional, allows multiple scopes
   })(req, res, next);
 });
 
@@ -21,9 +21,13 @@ router.get("/google", (req, res, next) => {
 ========================= */
 router.get(
   "/google/callback",
-  passport.authenticate("google", { failureRedirect: "/", session: true }),
+  passport.authenticate("google", {
+    failureRedirect: "/",  // redirect if login fails
+    session: true          // store session
+  }),
   (req, res) => {
-    res.redirect("/api/users/me"); // redirect after login
+    // Redirect logged-in users to their profile
+    res.redirect("/api/users/me");
   }
 );
 
