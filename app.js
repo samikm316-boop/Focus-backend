@@ -15,14 +15,19 @@ import xpRoutes from "./src/modules/xp/routes.js";
 const app = express();
 
 /* =========================
-   TRUST PROXY (Railway)
+   TRUST PROXY (REQUIRED FOR RAILWAY)
 ========================= */
 app.set("trust proxy", 1);
 
 /* =========================
    CORS
 ========================= */
-app.use(cors({ origin: true, credentials: true }));
+app.use(
+  cors({
+    origin: true,
+    credentials: true
+  })
+);
 
 /* =========================
    BODY PARSER
@@ -30,18 +35,20 @@ app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
 /* =========================
-   SESSION
+   SESSION (FIXED FOR CHROME)
 ========================= */
 app.use(
   session({
+    name: "focusplus.sid", // custom session name (cleaner)
     secret: process.env.SESSION_SECRET || "focusplussecret",
     resave: false,
     saveUninitialized: false,
     proxy: true,
     cookie: {
-      secure: process.env.NODE_ENV === "production",
+      secure: true,       // ALWAYS TRUE on Railway (HTTPS)
       httpOnly: true,
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax"
+      sameSite: "none",   // REQUIRED for Google OAuth
+      maxAge: 1000 * 60 * 60 * 24 // 1 day
     }
   })
 );
@@ -71,6 +78,7 @@ app.use("/api/xp", xpRoutes);
    SERVER START
 ========================= */
 const PORT = process.env.PORT || 3000;
+
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
