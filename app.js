@@ -15,7 +15,7 @@ import authRoutes from "./src/modules/auth/routes.js";
 import userRoutes from "./src/modules/users/routes.js";
 import chatRoutes from "./src/modules/chat/routes.js";
 import xpRoutes from "./src/modules/xp/routes.js";
-
+import studyRoutes from "./src/modules/study/routes.js";//temp🔥
 
 const app = express();
 
@@ -78,6 +78,7 @@ app.use("/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/xp", xpRoutes);
+app.use("/api/study", studyRoutes);//temp🔥
 
 /* =========================
    SERVER START
