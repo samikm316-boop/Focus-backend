@@ -23,14 +23,43 @@ router.get("/google", (req, res) => {
 /* =========================
    GOOGLE CALLBACK
 ========================= */
+import express from "express";
 import passport from "passport";
+import jwt from "jsonwebtoken";
 
+const router = express.Router();
+
+/* GOOGLE LOGIN */
+router.get(
+  "/google",
+  passport.authenticate("google", {
+    scope: ["profile", "email"],
+    prompt: "select_account"
+  })
+);
+
+/* GOOGLE CALLBACK (JWT VERSION) */
 router.get(
   "/google/callback",
-  passport.authenticate("google", { failureRedirect: "/", session: true }),
+  passport.authenticate("google", { session: false }),
   (req, res) => {
-    res.redirect("/api/users/me"); // redirect after login
+    const token = jwt.sign(
+      {
+        id: req.user.id,
+        email: req.user.email
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    // For now, return JSON so we can test
+    res.json({ token });
+
+    // Later for mobile deep link:
+    // res.redirect(`focusplus://auth?token=${token}`);
   }
 );
+
+export default router;
 
 export default router;
