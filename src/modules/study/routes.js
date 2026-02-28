@@ -1,15 +1,14 @@
 import express from "express";
 import { pool } from "../../config/db.js";
+import { authenticateJWT } from "../../middleware/auth.js";
 
 const router = express.Router();
 
 /* =========================
    CREATE NOTE
 ========================= */
-router.post("/notes", async (req, res) => {
+router.post("/notes", authenticateJWT, async (req, res) => {
   try {
-    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-
     const { title, content } = req.body;
 
     const result = await pool.query(
@@ -29,10 +28,8 @@ router.post("/notes", async (req, res) => {
 /* =========================
    GET MY NOTES
 ========================= */
-router.get("/notes", async (req, res) => {
+router.get("/notes", authenticateJWT, async (req, res) => {
   try {
-    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-
     const result = await pool.query(
       `SELECT * FROM notes
        WHERE user_id = $1
@@ -50,10 +47,8 @@ router.get("/notes", async (req, res) => {
 /* =========================
    GET SHARED NOTES
 ========================= */
-router.get("/shared", async (req, res) => {
+router.get("/shared", authenticateJWT, async (req, res) => {
   try {
-    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-
     const result = await pool.query(
       `SELECT n.*
        FROM notes n
@@ -69,14 +64,11 @@ router.get("/shared", async (req, res) => {
   }
 });
 
-
 /* =========================
    SHARE NOTE
 ========================= */
-router.post("/share", async (req, res) => {
+router.post("/share", authenticateJWT, async (req, res) => {
   try {
-    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-
     const { noteId, userId } = req.body;
 
     await pool.query(
@@ -96,10 +88,8 @@ router.post("/share", async (req, res) => {
 /* =========================
    TOGGLE PUBLIC
 ========================= */
-router.patch("/notes/:id/public", async (req, res) => {
+router.patch("/notes/:id/public", authenticateJWT, async (req, res) => {
   try {
-    if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-
     const noteId = req.params.id;
 
     const result = await pool.query(
