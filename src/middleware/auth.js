@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 
-export function isAuthenticated(req, res, next) {
+export function authenticateJWT(req, res, next) {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -12,7 +12,6 @@ export function isAuthenticated(req, res, next) {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // attach user to request
     req.user = decoded;
 
     next();
