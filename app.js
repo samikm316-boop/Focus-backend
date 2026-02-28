@@ -1,6 +1,5 @@
 import express from "express";
 import cors from "cors";
-import session from "express-session";
 import passport from "passport";
 import dotenv from "dotenv";
 
@@ -15,22 +14,21 @@ import authRoutes from "./src/modules/auth/routes.js";
 import userRoutes from "./src/modules/users/routes.js";
 import chatRoutes from "./src/modules/chat/routes.js";
 import xpRoutes from "./src/modules/xp/routes.js";
-import studyRoutes from "./src/modules/study/routes.js";//temp🔥
+import studyRoutes from "./src/modules/study/routes.js";
 
 const app = express();
 
 /* =========================
-   TRUST PROXY (REQUIRED FOR RAILWAY)
+   TRUST PROXY (RAILWAY)
 ========================= */
 app.set("trust proxy", 1);
 
 /* =========================
-   CORS
+   CORS (Mobile Safe)
 ========================= */
 app.use(
   cors({
     origin: true,
-    credentials: true,
   })
 );
 
@@ -40,35 +38,15 @@ app.use(
 app.use(express.json());
 
 /* =========================
-   SESSION (RAILWAY + CHROME SAFE)
-========================= */
-app.use(
-  session({
-    name: "focusplus.sid",
-    secret: process.env.SESSION_SECRET || "focusplussecret",
-    resave: false,
-    saveUninitialized: false,
-    proxy: true,
-    cookie: {
-      secure: true,      // Railway is HTTPS
-      httpOnly: true,
-      sameSite: "none",  // Required for Google OAuth
-      maxAge: 1000 * 60 * 60 * 24, // 1 day
-    },
-  })
-);
-
-/* =========================
-   PASSPORT
+   PASSPORT (NO SESSIONS)
 ========================= */
 app.use(passport.initialize());
-app.use(passport.session());
 
 /* =========================
    HEALTH CHECK
 ========================= */
 app.get("/", (req, res) => {
-  res.send("Focus+ Backend Modular 🚀");
+  res.send("Focus+ Backend JWT 🚀");
 });
 
 /* =========================
@@ -78,7 +56,7 @@ app.use("/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/xp", xpRoutes);
-app.use("/api/study", studyRoutes);//temp🔥
+app.use("/api/study", studyRoutes);
 
 /* =========================
    SERVER START
