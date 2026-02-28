@@ -1,6 +1,6 @@
 import express from "express";
 import { pool } from "../../config/db.js";
-import { isAuthenticated } from "../../middleware/auth.js";
+import { authenticateJWT } from "../../middleware/auth.js";
 import { generateAIReply } from "../../services/aiService.js";
 import { addXP } from "../../services/xpService.js";
 
@@ -17,7 +17,7 @@ function getSystemPrompt(type) {
   }
 }
 
-router.post("/", isAuthenticated, async (req, res) => {
+router.post("/", authenticateJWT, async (req, res) => {
   try {
     const { message, conversationId, type = "ai" } = req.body;
 
