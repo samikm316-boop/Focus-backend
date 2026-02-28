@@ -69,6 +69,26 @@ router.get("/shared", async (req, res) => {
   }
 });
 
+/*===================
+temp
+=====================*/
+router.get("/test-create", async (req, res) => {
+  if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+
+  const result = await pool.query(
+    `INSERT INTO notes (user_id, title, content)
+     VALUES ($1, $2, $3)
+     RETURNING *`,
+    [
+      req.user.id,
+      "Browser Test Note",
+      { blocks: [{ type: "text", value: "Created from browser" }] }
+    ]
+  );
+
+  res.json(result.rows[0]);
+});
+
 /* =========================
    SHARE NOTE
 ========================= */
