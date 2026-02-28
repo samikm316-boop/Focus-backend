@@ -57,7 +57,7 @@ router.post("/", authenticateJWT, async (req, res) => {
       [convoId, "assistant", aiReply]
     );
 
-    await addXP(userId, 5, "chat", convoId);
+   // await addXP(userId, 5, "chat", convoId);
 
     res.json({ conversationId: convoId, reply: aiReply });
 
