@@ -125,3 +125,19 @@ export async function getFlashcardStats(userId) {
 
   return result.rows[0];
 }
+/* GET STUDY SESSION */
+export async function getStudySession(userId, limit = 10) {
+  const result = await pool.query(
+    `
+    SELECT *
+    FROM flashcards
+    WHERE user_id = $1
+      AND next_review_at <= CURRENT_TIMESTAMP
+    ORDER BY next_review_at ASC
+    LIMIT $2
+    `,
+    [userId, limit]
+  );
+
+  return result.rows;
+}
