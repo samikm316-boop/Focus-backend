@@ -1,6 +1,7 @@
 import express from "express";
 import { authenticateJWT } from "../../middleware/auth.js";
 import { addXP } from "../../services/xpService.js";
+import { updateStreak } from "../../services/streakService.js";
 
 /* ===== NOTES SERVICE ===== */
 import {
@@ -29,7 +30,6 @@ const router = express.Router();
    NOTES ROUTES
 ===================================================== */
 
-/* CREATE NOTE */
 router.post("/notes", authenticateJWT, async (req, res) => {
   try {
     const { title, content } = req.body;
@@ -39,7 +39,6 @@ router.post("/notes", authenticateJWT, async (req, res) => {
     }
 
     const note = await createNote(req.user.id, title, content);
-
     await addXP(req.user.id, 10, "note_create", note.id);
 
     res.status(201).json(note);
@@ -49,7 +48,6 @@ router.post("/notes", authenticateJWT, async (req, res) => {
   }
 });
 
-/* GET NOTES */
 router.get("/notes", authenticateJWT, async (req, res) => {
   try {
     const { page = 1, limit = 10, search = "" } = req.query;
@@ -68,7 +66,6 @@ router.get("/notes", authenticateJWT, async (req, res) => {
   }
 });
 
-/* GET SINGLE NOTE */
 router.get("/notes/:id", authenticateJWT, async (req, res) => {
   try {
     const note = await getNoteById(req.user.id, req.params.id);
@@ -84,7 +81,6 @@ router.get("/notes/:id", authenticateJWT, async (req, res) => {
   }
 });
 
-/* UPDATE NOTE */
 router.put("/notes/:id", authenticateJWT, async (req, res) => {
   try {
     const { title, content } = req.body;
@@ -107,7 +103,6 @@ router.put("/notes/:id", authenticateJWT, async (req, res) => {
   }
 });
 
-/* DELETE NOTE */
 router.delete("/notes/:id", authenticateJWT, async (req, res) => {
   try {
     await deleteNote(req.user.id, req.params.id);
@@ -122,7 +117,6 @@ router.delete("/notes/:id", authenticateJWT, async (req, res) => {
    FLASHCARDS ROUTES
 ===================================================== */
 
-/* CREATE FLASHCARD */
 router.post("/flashcards", authenticateJWT, async (req, res) => {
   try {
     const { question, answer } = req.body;
@@ -146,7 +140,6 @@ router.post("/flashcards", authenticateJWT, async (req, res) => {
   }
 });
 
-/* GET FLASHCARDS */
 router.get("/flashcards", authenticateJWT, async (req, res) => {
   try {
     const { page = 1, limit = 10 } = req.query;
@@ -163,7 +156,7 @@ router.get("/flashcards", authenticateJWT, async (req, res) => {
     res.status(500).json({ message: "Error fetching flashcards" });
   }
 });
-/* GET DUE FLASHCARDS */
+
 router.get("/flashcards/due", authenticateJWT, async (req, res) => {
   try {
     const due = await getDueFlashcards(req.user.id);
@@ -173,7 +166,7 @@ router.get("/flashcards/due", authenticateJWT, async (req, res) => {
     res.status(500).json({ message: "Error fetching due flashcards" });
   }
 });
-/* GET FLASHCARD STATS */
+
 router.get("/flashcards/stats", authenticateJWT, async (req, res) => {
   try {
     const stats = await getFlashcardStats(req.user.id);
@@ -183,7 +176,7 @@ router.get("/flashcards/stats", authenticateJWT, async (req, res) => {
     res.status(500).json({ message: "Error fetching flashcard stats" });
   }
 });
-/* START STUDY SESSION */
+
 router.get("/flashcards/study-session", authenticateJWT, async (req, res) => {
   try {
     const { limit = 10 } = req.query;
@@ -203,7 +196,6 @@ router.get("/flashcards/study-session", authenticateJWT, async (req, res) => {
   }
 });
 
-/* UPDATE FLASHCARD */
 router.put("/flashcards/:id", authenticateJWT, async (req, res) => {
   try {
     const { question, answer } = req.body;
@@ -226,7 +218,6 @@ router.put("/flashcards/:id", authenticateJWT, async (req, res) => {
   }
 });
 
-/* DELETE FLASHCARD */
 router.delete("/flashcards/:id", authenticateJWT, async (req, res) => {
   try {
     await deleteFlashcard(req.user.id, req.params.id);
@@ -237,7 +228,6 @@ router.delete("/flashcards/:id", authenticateJWT, async (req, res) => {
   }
 });
 
-/* REVIEW FLASHCARD */
 router.post("/flashcards/:id/review", authenticateJWT, async (req, res) => {
   try {
     const { difficulty = 1 } = req.body;
@@ -253,7 +243,6 @@ router.post("/flashcards/:id/review", authenticateJWT, async (req, res) => {
     }
 
     await addXP(req.user.id, 8, "flashcard_review", reviewed.id);
-    import { updateStreak } from "../../services/streakService.js";
     await updateStreak(req.user.id);
 
     res.json(reviewed);
