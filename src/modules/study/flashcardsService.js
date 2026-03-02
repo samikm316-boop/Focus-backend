@@ -108,3 +108,20 @@ export async function getDueFlashcards(userId) {
 
   return result.rows;
 }
+/* GET FLASHCARD STATS */
+export async function getFlashcardStats(userId) {
+  const result = await pool.query(
+    `
+    SELECT
+      COUNT(*) AS total_cards,
+      COUNT(*) FILTER (WHERE next_review_at <= CURRENT_TIMESTAMP) AS total_due,
+      COUNT(*) FILTER (WHERE next_review_at < CURRENT_DATE) AS total_overdue,
+      MIN(next_review_at) AS next_review_date
+    FROM flashcards
+    WHERE user_id = $1
+    `,
+    [userId]
+  );
+
+  return result.rows[0];
+}
