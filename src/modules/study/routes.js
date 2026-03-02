@@ -17,6 +17,7 @@ import {
   getFlashcards,
   updateFlashcard,
   deleteFlashcard,
+  getDueFlashcards,
   reviewFlashcard
 } from "./flashcardsService.js";
 
@@ -158,6 +159,16 @@ router.get("/flashcards", authenticateJWT, async (req, res) => {
   } catch (err) {
     console.error("GET FLASHCARDS ERROR:", err);
     res.status(500).json({ message: "Error fetching flashcards" });
+  }
+});
+/* GET DUE FLASHCARDS */
+router.get("/flashcards/due", authenticateJWT, async (req, res) => {
+  try {
+    const due = await getDueFlashcards(req.user.id);
+    res.json(due);
+  } catch (err) {
+    console.error("GET DUE FLASHCARDS ERROR:", err);
+    res.status(500).json({ message: "Error fetching due flashcards" });
   }
 });
 
