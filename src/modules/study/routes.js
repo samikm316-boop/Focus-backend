@@ -2,6 +2,7 @@ import express from "express";
 import { authenticateJWT } from "../../middleware/auth.js";
 import { addXP } from "../../services/xpService.js";
 import { updateStreak } from "../../services/streakService.js";
+import { pool } from "../../config/db.js";
 
 /* ===== NOTES SERVICE ===== */
 import {
@@ -252,4 +253,20 @@ router.post("/flashcards/:id/review", authenticateJWT, async (req, res) => {
   }
 });
 
+/* GET STREAK */
+router.get("/streak", authenticateJWT, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT current_streak, longest_streak, last_study_date
+       FROM users
+       WHERE id = $1`,
+      [req.user.id]
+    );
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("GET STREAK ERROR:", err);
+    res.status(500).json({ message: "Error fetching streak" });
+  }
+});
 export default router;
