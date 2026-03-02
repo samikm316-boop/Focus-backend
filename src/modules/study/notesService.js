@@ -53,15 +53,35 @@ export async function getNoteById(userId, noteId) {
    UPDATE NOTE
 ========================= */
 export async function updateNote(userId, noteId, title, content) {
+  const fields = [];
+  const values = [];
+  let index = 1;
+
+  if (title !== undefined) {
+    fields.push(`title = $${index++}`);
+    values.push(title);
+  }
+
+  if (content !== undefined) {
+    fields.push(`content = $${index++}`);
+    values.push(content);
+  }
+
+  if (fields.length === 0) {
+    return null;
+  }
+
+  values.push(noteId);
+  values.push(userId);
+
   const result = await pool.query(
     `
     UPDATE notes
-    SET title = $1,
-        content = $2
-    WHERE id = $3 AND user_id = $4
+    SET ${fields.join(", ")}
+    WHERE id = $${index++} AND user_id = $${index}
     RETURNING *
     `,
-    [title, content, noteId, userId]
+    values
   );
 
   return result.rows[0];
