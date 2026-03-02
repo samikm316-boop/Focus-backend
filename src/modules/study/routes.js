@@ -8,6 +8,7 @@ import {
   getNotes,
   getNoteById,
   updateNote,
+  getStudySession,
   deleteNote
 } from "./notesService.js";
 
@@ -180,6 +181,25 @@ router.get("/flashcards/stats", authenticateJWT, async (req, res) => {
   } catch (err) {
     console.error("GET FLASHCARD STATS ERROR:", err);
     res.status(500).json({ message: "Error fetching flashcard stats" });
+  }
+});
+/* START STUDY SESSION */
+router.get("/flashcards/study-session", authenticateJWT, async (req, res) => {
+  try {
+    const { limit = 10 } = req.query;
+
+    const session = await getStudySession(
+      req.user.id,
+      Number(limit)
+    );
+
+    res.json({
+      total: session.length,
+      cards: session
+    });
+  } catch (err) {
+    console.error("STUDY SESSION ERROR:", err);
+    res.status(500).json({ message: "Error starting study session" });
   }
 });
 
