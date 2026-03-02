@@ -8,7 +8,6 @@ import {
   getNotes,
   getNoteById,
   updateNote,
-  getFlashcardStats,
   deleteNote
 } from "./notesService.js";
 
@@ -19,6 +18,7 @@ import {
   updateFlashcard,
   deleteFlashcard,
   getDueFlashcards,
+  getFlashcardStats,
   reviewFlashcard
 } from "./flashcardsService.js";
 
