@@ -253,6 +253,7 @@ router.post("/flashcards/:id/review", authenticateJWT, async (req, res) => {
     }
 
     await addXP(req.user.id, 8, "flashcard_review", reviewed.id);
+    import { updateStreak } from "../../services/streakService.js";
 
     res.json(reviewed);
   } catch (err) {
