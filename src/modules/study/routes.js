@@ -172,6 +172,16 @@ router.get("/flashcards/due", authenticateJWT, async (req, res) => {
     res.status(500).json({ message: "Error fetching due flashcards" });
   }
 });
+/* GET FLASHCARD STATS */
+router.get("/flashcards/stats", authenticateJWT, async (req, res) => {
+  try {
+    const stats = await getFlashcardStats(req.user.id);
+    res.json(stats);
+  } catch (err) {
+    console.error("GET FLASHCARD STATS ERROR:", err);
+    res.status(500).json({ message: "Error fetching flashcard stats" });
+  }
+});
 
 /* UPDATE FLASHCARD */
 router.put("/flashcards/:id", authenticateJWT, async (req, res) => {
