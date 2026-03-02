@@ -1,6 +1,13 @@
 import express from "express";
-import { pool } from "../../config/db.js";
 import { authenticateJWT } from "../../middleware/auth.js";
+import { addXP } from "../../services/xpService.js";
+import {
+  createNote,
+  getNotes,
+  getNoteById,
+  updateNote,
+  deleteNote
+} from "./notesService.js";
 
 const router = express.Router();
 
@@ -11,14 +18,16 @@ router.post("/notes", authenticateJWT, async (req, res) => {
   try {
     const { title, content } = req.body;
 
-    const result = await pool.query(
-      `INSERT INTO notes (user_id, title, content)
-       VALUES ($1, $2, $3)
-       RETURNING *`,
-      [req.user.id, title, content]
-    );
+    if (!title || !content) {
+      return res.status(400).json({ message: "Title and content required" });
+    }
 
-    res.json(result.rows[0]);
+    const note = await createNote(req.user.id, title, content);
+
+    // Award XP
+    await addXP(req.user.id, 10, "note_create", note.id);
+
+    res.status(201).json(note);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Error creating note" });
@@ -26,18 +35,20 @@ router.post("/notes", authenticateJWT, async (req, res) => {
 });
 
 /* =========================
-   GET MY NOTES
+   GET NOTES (PAGINATED + SEARCH)
 ========================= */
 router.get("/notes", authenticateJWT, async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT * FROM notes
-       WHERE user_id = $1
-       ORDER BY created_at DESC`,
-      [req.user.id]
+    const { page = 1, limit = 10, search = "" } = req.query;
+
+    const notes = await getNotes(
+      req.user.id,
+      Number(page),
+      Number(limit),
+      search
     );
 
-    res.json(result.rows);
+    res.json(notes);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Error fetching notes" });
@@ -45,65 +56,58 @@ router.get("/notes", authenticateJWT, async (req, res) => {
 });
 
 /* =========================
-   GET SHARED NOTES
+   GET SINGLE NOTE
 ========================= */
-router.get("/shared", authenticateJWT, async (req, res) => {
+router.get("/notes/:id", authenticateJWT, async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT n.*
-       FROM notes n
-       JOIN note_shares s ON n.id = s.note_id
-       WHERE s.shared_with_user_id = $1`,
-      [req.user.id]
-    );
+    const note = await getNoteById(req.user.id, req.params.id);
 
-    res.json(result.rows);
+    if (!note) {
+      return res.status(404).json({ message: "Note not found" });
+    }
+
+    res.json(note);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: "Error fetching shared notes" });
+    res.status(500).json({ message: "Error fetching note" });
   }
 });
 
 /* =========================
-   SHARE NOTE
+   UPDATE NOTE
 ========================= */
-router.post("/share", authenticateJWT, async (req, res) => {
+router.put("/notes/:id", authenticateJWT, async (req, res) => {
   try {
-    const { noteId, userId } = req.body;
+    const { title, content } = req.body;
 
-    await pool.query(
-      `INSERT INTO note_shares (note_id, shared_with_user_id)
-       VALUES ($1, $2)
-       ON CONFLICT DO NOTHING`,
-      [noteId, userId]
+    const updated = await updateNote(
+      req.user.id,
+      req.params.id,
+      title,
+      content
     );
 
-    res.json({ message: "Note shared successfully" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Error sharing note" });
-  }
-});
+    if (!updated) {
+      return res.status(404).json({ message: "Note not found" });
+    }
 
-/* =========================
-   TOGGLE PUBLIC
-========================= */
-router.patch("/notes/:id/public", authenticateJWT, async (req, res) => {
-  try {
-    const noteId = req.params.id;
-
-    const result = await pool.query(
-      `UPDATE notes
-       SET is_public = NOT is_public
-       WHERE id = $1 AND user_id = $2
-       RETURNING *`,
-      [noteId, req.user.id]
-    );
-
-    res.json(result.rows[0]);
+    res.json(updated);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Error updating note" });
+  }
+});
+
+/* =========================
+   DELETE NOTE
+========================= */
+router.delete("/notes/:id", authenticateJWT, async (req, res) => {
+  try {
+    await deleteNote(req.user.id, req.params.id);
+    res.json({ message: "Note deleted" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Error deleting note" });
   }
 });
 
