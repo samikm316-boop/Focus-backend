@@ -8,6 +8,7 @@ import {
   getNotes,
   getNoteById,
   updateNote,
+  getFlashcardStats,
   deleteNote
 } from "./notesService.js";
 
