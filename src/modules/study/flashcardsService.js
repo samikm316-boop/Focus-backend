@@ -73,6 +73,7 @@ export async function deleteFlashcard(userId, id) {
   );
 }
 
+
 /* REVIEW FLASHCARD (basic spaced repetition) */
 export async function reviewFlashcard(userId, id, difficulty = 1) {
   // Increase interval based on difficulty
@@ -90,4 +91,20 @@ export async function reviewFlashcard(userId, id, difficulty = 1) {
   );
 
   return result.rows[0];
+}
+
+/* GET DUE FLASHCARDS */
+export async function getDueFlashcards(userId) {
+  const result = await pool.query(
+    `
+    SELECT *
+    FROM flashcards
+    WHERE user_id = $1
+      AND next_review_at <= CURRENT_TIMESTAMP
+    ORDER BY next_review_at ASC
+    `,
+    [userId]
+  );
+
+  return result.rows;
 }
