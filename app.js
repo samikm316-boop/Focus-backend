@@ -15,6 +15,7 @@ import userRoutes from "./src/modules/users/routes.js";
 import chatRoutes from "./src/modules/chat/routes.js";
 import xpRoutes from "./src/modules/xp/routes.js";
 import studyRoutes from "./src/modules/study/routes.js";
+import emailAuthRoutes from "./src/modules/auth/emailAuth.js";
 
 const app = express();
 
@@ -53,6 +54,7 @@ app.get("/", (req, res) => {
    ROUTES
 ========================= */
 app.use("/auth", authRoutes);
+app.use("/auth", emailAuthRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/xp", xpRoutes);
