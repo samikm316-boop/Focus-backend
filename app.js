@@ -60,6 +60,10 @@ app.use("/api/chat", chatRoutes);
 app.use("/api/xp", xpRoutes);
 app.use("/api/study", studyRoutes);
 
+const dashboardRoutes = require("./modules/dashboard/dashboard.routes");
+
+app.use("/api/dashboard", dashboardRoutes);
+
 /* =========================
    SERVER START
 ========================= */
