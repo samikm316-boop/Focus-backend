@@ -16,8 +16,14 @@ import chatRoutes from "./src/modules/chat/routes.js";
 import xpRoutes from "./src/modules/xp/routes.js";
 import studyRoutes from "./src/modules/study/routes.js";
 import emailAuthRoutes from "./src/modules/auth/emailAuth.js";
+import subjectRoutes from "./src/modules/subjects/routes.js";
 
 const app = express();
+
+app.use(
+  "/api/subjects",
+  subjectRoutes
+);
 
 /* =========================
    TRUST PROXY (RAILWAY)
